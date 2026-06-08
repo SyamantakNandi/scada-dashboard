@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+scada.db
+*.db-shm
+*.db-wal
+.DS_Store
+venv/
+.venv/

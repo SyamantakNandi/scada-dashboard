@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – SCADA{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ── Layout ── */
+body{display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);
+        padding:14px 28px;display:flex;align-items:center;justify-content:space-between;
+        position:sticky;top:0;z-index:100}
+.topbar-left{display:flex;align-items:center;gap:16px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:8px;
+           display:flex;align-items:center;justify-content:center;font-size:18px}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.user-pill{display:flex;align-items:center;gap:8px;background:var(--surface2);
+           border:1px solid var(--border);border-radius:20px;padding:7px 14px;font-size:14px}
+.main{flex:1;padding:28px;max-width:1600px;width:100%;margin:0 auto}
+
+/* ── Status strip ── */
+.status-strip{display:flex;align-items:center;gap:16px;padding:14px 20px;
+              border-radius:12px;border:1px solid var(--border);background:var(--surface);
+              margin-bottom:24px;flex-wrap:wrap}
+.live-dot{width:10px;height:10px;border-radius:50%;background:var(--success);
+          box-shadow:0 0 8px var(--success);animation:pulse 1.2s infinite}
+.offline-dot{width:10px;height:10px;border-radius:50%;background:var(--danger)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── Device tabs ── */
+.device-tabs{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap}
+.dtab{padding:9px 18px;border-radius:8px;border:1px solid var(--border);cursor:pointer;
+      font-size:14px;font-weight:600;color:var(--sub);background:transparent;transition:all .2s}
+.dtab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* ── Section tabs ── */
+.section-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px}
+.stab{padding:7px 16px;border-radius:20px;border:1px solid var(--border);cursor:pointer;
+      font-size:13px;font-weight:600;color:var(--sub);background:transparent;transition:all .2s}
+.stab.active{background:rgba(37,99,235,.15);border-color:var(--accent);color:var(--accent2)}
+
+/* ── Cards ── */
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+            gap:16px;margin-bottom:28px}
+.metric-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+             padding:20px;transition:all .3s;position:relative;overflow:hidden}
+.metric-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent)}
+.metric-card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--card-glow)}
+.metric-label{font-size:12px;font-weight:600;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.metric-value{font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1}
+.metric-unit{font-size:14px;font-weight:500;color:var(--sub);margin-top:6px}
+
+/* ── Gauges ── */
+.gauges-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
+.gauge-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+            padding:20px;display:flex;flex-direction:column;align-items:center}
+.gauge-title{font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text)}
+.gauge-wrap{position:relative;width:200px;height:110px}
+
+/* ── Loading state ── */
+.skeleton{background:linear-gradient(90deg,var(--surface2) 25%,var(--border) 50%,var(--surface2) 75%);
+          background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <span>SCADA Portal</span>
+    </div>
+    <span style="color:var(--sub);font-size:13px">Industrial Monitoring System</span>
+  </div>
+  <div class="topbar-right">
+    <div id="global-status" class="user-pill">
+      <div class="offline-dot"></div> Connecting…
+    </div>
+    <div class="user-pill">
+      👤 {{ username }}
+      <span class="badge {% if role=='admin' %}badge-admin{% else %}badge-user{% endif %}" style="margin-left:4px">{{ role }}</span>
+    </div>
+    {% if role == 'admin' %}
+    <a href="{{ url_for('admin') }}" class="btn btn-ghost btn-sm">⚙ Admin Panel</a>
+    {% endif %}
+    <a href="{{ url_for('logout') }}" class="btn btn-ghost btn-sm">↩ Logout</a>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Status strip -->
+  <div class="status-strip" id="status-strip">
+    <div style="font-weight:700;font-size:15px">System Status</div>
+    <div id="status-devices" style="display:flex;gap:12px;flex-wrap:wrap"></div>
+    <div style="margin-left:auto;color:var(--sub);font-size:12px" id="last-update">–</div>
+  </div>
+
+  <!-- Device tabs -->
+  <div class="device-tabs" id="device-tabs">
+    {% for d in devices %}
+    <button class="dtab {% if loop.first %}active{% endif %}"
+            onclick="selectDevice({{ d.id }}, this)"
+            data-device-id="{{ d.id }}">
+      📟 {{ d.name }}
+    </button>
+    {% endfor %}
+  </div>
+
+  <!-- Section tabs -->
+  <div class="section-bar" id="section-bar"></div>
+
+  <!-- Metric cards -->
+  <div class="cards-grid" id="cards-grid">
+    <div class="metric-card skeleton" style="height:100px"></div>
+    <div class="metric-card skeleton" style="height:100px"></div>
+    <div class="metric-card skeleton" style="height:100px"></div>
+    <div class="metric-card skeleton" style="height:100px"></div>
+  </div>
+
+  <!-- Gauge charts -->
+  <div class="gauges-grid" id="gauges-grid"></div>
+
+</div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+const SECTIONS = {
+  Voltage:       ['v_r_phase','v_y_phase','v_b_phase','v_ln_avg','v_ll_ry','v_ll_yb','v_ll_br','v_ll_avg'],
+  Current:       ['current_r','current_y','current_b','current_total','amp_max'],
+  Power:         ['watt_total','watt_r','watt_y','watt_b','var_total','va_total'],
+  'Power Factor':['pf_avg','pf_r','pf_y','pf_b'],
+  Energy:        ['wh_delivered','vah_delivered','varh_ind','varh_cap'],
+  Harmonics:     ['volt_r_harm','volt_y_harm','volt_b_harm','current_r_harm','current_y_harm','current_b_harm'],
+  Angles:        ['volt_r_angle','volt_y_angle','volt_b_angle','current_r_angle','current_y_angle','current_b_angle'],
+  Environment:   ['rpm','co2_emission'],
+};
+
+let liveData      = {};          // device_id → full reading
+let currentDevice = {{ devices[0].id if devices else 'null' }};
+let currentSection= 'Voltage';
+let paramsMeta    = {};          // device_id → { key: {label,unit,max_val} }
+let gaugeCharts   = {};          // canvas-id → Chart instance
+
+// ─── Fetch device params from API ────────────────────────────────────────────
+async function loadParams(deviceId) {
+  if (paramsMeta[deviceId]) return;
+  const r = await fetch(`/api/params/${deviceId}`);
+  const rows = await r.json();
+  paramsMeta[deviceId] = {};
+  rows.forEach(p => paramsMeta[deviceId][p.key] = { label: p.label, unit: p.unit, max_val: p.max_val });
+}
+
+// ─── Poll live data for all devices ─────────────────────────────────────────
+async function pollLive() {
+  try {
+    const r = await fetch('/api/live');
+    const arr = await r.json();
+
+    arr.forEach(d => liveData[d.device_id] = d);
+
+    // update status strip
+    const statusDevs = document.getElementById('status-devices');
+    statusDevs.innerHTML = arr.map(d => `
+      <div style="display:flex;align-items:center;gap:6px;font-size:13px">
+        <div class="${d.connected ? 'live-dot' : 'offline-dot'}"></div>
+        <span>${d.name}: <strong>${d.connected ? 'ONLINE' : 'OFFLINE'}</strong></span>
+      </div>`).join('');
+
+    const anyOn = arr.some(d => d.connected);
+    const gs = document.getElementById('global-status');
+    gs.innerHTML = anyOn
+      ? `<div class="live-dot"></div> <span style="color:var(--success);font-weight:700">● LIVE</span>`
+      : `<div class="offline-dot"></div> <span style="color:var(--danger);font-weight:700">● OFFLINE</span>`;
+
+    document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+
+    renderCards();
+    renderGauges();
+  } catch(e) {
+    console.error('Poll error', e);
+  }
+}
+
+// ─── Build section tabs ───────────────────────────────────────────────────────
+function buildSectionBar() {
+  const bar = document.getElementById('section-bar');
+  bar.innerHTML = Object.keys(SECTIONS).map(s => `
+    <button class="stab ${s===currentSection?'active':''}" onclick="selectSection('${s}',this)">${s}</button>
+  `).join('');
+}
+
+function selectSection(name, el) {
+  currentSection = name;
+  document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderCards();
+  renderGauges();
+}
+
+// ─── Device tab switch ────────────────────────────────────────────────────────
+async function selectDevice(id, el) {
+  currentDevice = id;
+  document.querySelectorAll('.dtab').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  await loadParams(id);
+  renderCards();
+  renderGauges();
+}
+
+// ─── Render metric cards ──────────────────────────────────────────────────────
+function renderCards() {
+  const grid  = document.getElementById('cards-grid');
+  const meta  = paramsMeta[currentDevice] || {};
+  const data  = liveData[currentDevice]   || {};
+  const keys  = (SECTIONS[currentSection] || []).filter(k => meta[k]);
+
+  if (!keys.length) {
+    grid.innerHTML = `<div style="color:var(--sub);grid-column:1/-1;padding:20px">
+      No parameters configured for this section on this device.</div>`;
+    return;
+  }
+
+  grid.innerHTML = keys.map(k => {
+    const m   = meta[k];
+    const val = data[k] ?? '–';
+    return `<div class="metric-card">
+      <div class="metric-label">${m.label}</div>
+      <div class="metric-value">${typeof val==='number' ? val.toFixed(3) : val}</div>
+      <div class="metric-unit">${m.unit}</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── Render gauge charts ──────────────────────────────────────────────────────
+function renderGauges() {
+  const grid  = document.getElementById('gauges-grid');
+  const meta  = paramsMeta[currentDevice] || {};
+  const data  = liveData[currentDevice]   || {};
+  const keys  = (SECTIONS[currentSection] || []).filter(k => meta[k]);
+
+  // destroy old charts
+  Object.values(gaugeCharts).forEach(c => c.destroy());
+  gaugeCharts = {};
+
+  if (!keys.length) { grid.innerHTML = ''; return; }
+
+  grid.innerHTML = keys.map((k, i) => `
+    <div class="gauge-card">
+      <div class="gauge-title">${meta[k].label} <span style="color:var(--sub);font-weight:400">(${meta[k].unit})</span></div>
+      <canvas id="g_${i}" width="260" height="140"></canvas>
+      <div style="font-size:22px;font-weight:800;margin-top:8px" id="gv_${i}">
+        ${typeof data[k]==='number' ? data[k].toFixed(3) : '–'} ${meta[k].unit}
+      </div>
+    </div>`).join('');
+
+  keys.forEach((k, i) => {
+    const val    = data[k] ?? 0;
+    const maxVal = meta[k].max_val || 100;
+    const pct    = Math.min(val / maxVal, 1);
+    const ctx    = document.getElementById(`g_${i}`).getContext('2d');
+
+    gaugeCharts[`g_${i}`] = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        datasets: [{
+          data: [pct, 1 - pct],
+          backgroundColor: [pct > 0.7 ? '#ef4444' : '#2563eb', '#1a2235'],
+          borderWidth: 0,
+          circumference: 180,
+          rotation: 270
+        }]
+      },
+      options: {
+        responsive: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        cutout: '72%'
+      }
+    });
+  });
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+async function init() {
+  buildSectionBar();
+  if (currentDevice) await loadParams(currentDevice);
+  await pollLive();
+  setInterval(pollLive, 2000);
+}
+
+init();
+</script>
+{% endblock %}

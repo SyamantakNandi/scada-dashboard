@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Login – SCADA Dashboard{% endblock %}
+
+{% block extra_head %}
+<style>
+body{display:flex;align-items:center;justify-content:center;
+     background:radial-gradient(ellipse at 60% 40%, #0d1b3e 0%, #0b0f1a 60%)}
+.login-wrap{width:100%;max-width:440px;padding:20px}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:36px;justify-content:center}
+.brand-icon{width:52px;height:52px;background:var(--accent);border-radius:14px;
+            display:flex;align-items:center;justify-content:center;font-size:26px;
+            box-shadow:0 0 30px rgba(37,99,235,.4)}
+.brand-name{font-size:24px;font-weight:800;letter-spacing:-.5px}
+.brand-sub{font-size:13px;color:var(--sub);font-weight:400}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:20px;
+      padding:36px;box-shadow:var(--card-glow)}
+.card h2{font-size:22px;font-weight:700;margin-bottom:6px}
+.card p{color:var(--sub);font-size:14px;margin-bottom:28px}
+.role-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:28px}
+.role-tab{padding:12px;border-radius:10px;border:2px solid var(--border);cursor:pointer;
+          text-align:center;font-weight:600;font-size:14px;transition:all .2s;background:transparent;color:var(--sub)}
+.role-tab.active{border-color:var(--accent);background:rgba(37,99,235,.1);color:var(--text)}
+.divider{text-align:center;color:var(--sub);font-size:13px;margin:20px 0;position:relative}
+.divider::before,.divider::after{content:'';position:absolute;top:50%;width:42%;height:1px;background:var(--border)}
+.divider::before{left:0} .divider::after{right:0}
+.signup-link{text-align:center;font-size:14px;color:var(--sub);margin-top:20px}
+.signup-link a{color:var(--accent2);font-weight:600;text-decoration:none}
+.signup-link a:hover{text-decoration:underline}
+.input-icon-wrap{position:relative}
+.input-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:16px}
+.input-icon-wrap .form-control{padding-left:40px}
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="login-wrap">
+  <div class="brand">
+    <div class="brand-icon">⚡</div>
+    <div>
+      <div class="brand-name">SCADA Portal</div>
+      <div class="brand-sub">Industrial Monitoring System</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Sign In</h2>
+    <p>Select your role and enter your credentials</p>
+
+    <div class="role-tabs">
+      <button class="role-tab active" id="tab-admin" onclick="setRole('admin')">🔑 Admin</button>
+      <button class="role-tab"        id="tab-user"  onclick="setRole('user')">👁 View Only</button>
+    </div>
+
+    <form method="POST">
+      <div class="form-group">
+        <label>Username</label>
+        <div class="input-icon-wrap">
+          <span class="input-icon">👤</span>
+          <input class="form-control" type="text" name="username" placeholder="Enter username" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <div class="input-icon-wrap">
+          <span class="input-icon">🔒</span>
+          <input class="form-control" type="password" name="password" placeholder="Enter password" required>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:13px">
+        Sign In →
+      </button>
+    </form>
+
+    <div class="divider">or</div>
+
+    <div class="signup-link">
+      Need admin access? <a href="{{ url_for('signup') }}">Request Admin Account</a>
+    </div>
+  </div>
+</div>
+
+<script>
+function setRole(r){
+  document.getElementById('tab-admin').classList.toggle('active', r==='admin');
+  document.getElementById('tab-user').classList.toggle('active', r==='user');
+}
+</script>
+{% endblock %}

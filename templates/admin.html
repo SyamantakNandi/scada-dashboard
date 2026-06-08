@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+{% block title %}Admin Panel – SCADA{% endblock %}
+
+{% block extra_head %}
+<style>
+body{display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);
+        padding:14px 28px;display:flex;align-items:center;justify-content:space-between;
+        position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:8px;
+           display:flex;align-items:center;justify-content:center;font-size:18px}
+.main{flex:1;padding:28px;max-width:1400px;width:100%;margin:0 auto}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+.page-header h1{font-size:26px;font-weight:800}
+.section-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+              margin-bottom:28px;overflow:hidden}
+.section-card-header{padding:20px 24px;border-bottom:1px solid var(--border);
+                     display:flex;align-items:center;justify-content:space-between}
+.section-card-header h3{font-size:17px;font-weight:700;display:flex;align-items:center;gap:10px}
+.table-wrap{overflow-x:auto}
+
+/* pill tabs for admin sections */
+.admin-tabs{display:flex;gap:8px;margin-bottom:24px;border-bottom:1px solid var(--border);padding-bottom:12px}
+.atab{padding:9px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;
+      background:transparent;color:var(--sub);border:1px solid transparent;transition:all .2s}
+.atab.active{background:rgba(37,99,235,.15);border-color:var(--accent);color:var(--accent2)}
+.tab-panel{display:none} .tab-panel.active{display:block}
+
+/* inline edit form in table row */
+.edit-row{background:rgba(37,99,235,.05)!important}
+.edit-row input,.edit-row select{
+  background:var(--bg);border:1px solid var(--accent);color:var(--text);padding:5px 8px;
+  border-radius:6px;font-size:13px;width:100%}
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <span>SCADA Portal</span>
+    <span style="color:var(--sub);font-size:13px;font-weight:400;margin-left:8px">/ Admin Panel</span>
+  </div>
+  <div style="display:flex;gap:10px">
+    <a href="{{ url_for('dashboard') }}" class="btn btn-ghost btn-sm">📊 Dashboard</a>
+    <a href="{{ url_for('logout') }}" class="btn btn-ghost btn-sm">↩ Logout</a>
+  </div>
+</div>
+
+<div class="main">
+  <div class="page-header">
+    <h1>⚙ Admin Panel</h1>
+    <div class="badge badge-admin" style="font-size:14px;padding:6px 14px">{{ username }}</div>
+  </div>
+
+  <!-- Admin section tabs -->
+  <div class="admin-tabs">
+    <button class="atab active" onclick="showTab('plc')">📟 PLC Devices</button>
+    <button class="atab"        onclick="showTab('params')">📋 Modbus Parameters</button>
+    <button class="atab"        onclick="showTab('users')">👥 User Management</button>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════
+       TAB 1: PLC Devices
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="tab-panel active" id="tab-plc">
+    <div class="section-card">
+      <div class="section-card-header">
+        <h3>📟 PLC / Modbus Devices</h3>
+        <button class="btn btn-primary btn-sm" onclick="openModal('modal-add-device')">+ Add Device</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>ID</th><th>Name</th><th>IP Address</th><th>Port</th><th>Slave ID</th><th>Status</th><th>Actions</th>
+          </tr></thead>
+          <tbody>
+          {% for d in devices %}
+          <tr id="dev-row-{{ d.id }}">
+            <td>#{{ d.id }}</td>
+            <td><strong>{{ d.name }}</strong></td>
+            <td><code style="color:var(--accent2)">{{ d.ip }}</code></td>
+            <td>{{ d.port }}</td>
+            <td>{{ d.slave_id }}</td>
+            <td>
+              {% if d.enabled %}
+              <span class="badge badge-success">● Enabled</span>
+              {% else %}
+              <span class="badge badge-danger">○ Disabled</span>
+              {% endif %}
+            </td>
+            <td style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" onclick="editDevice({{ d.id }},'{{ d.name }}','{{ d.ip }}',{{ d.port }},{{ d.slave_id }},{{ d.enabled }})">✏ Edit</button>
+              <form method="POST" action="{{ url_for('admin_device_delete') }}" onsubmit="return confirm('Delete device {{ d.name }}?')">
+                <input type="hidden" name="device_id" value="{{ d.id }}">
+                <button type="submit" class="btn btn-danger btn-sm">🗑</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════
+       TAB 2: Modbus Parameters
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="tab-panel" id="tab-params">
+    {% for d in devices %}
+    <div class="section-card" style="margin-bottom:24px">
+      <div class="section-card-header">
+        <h3>📋 {{ d.name }} &nbsp;<span class="badge badge-user">IP: {{ d.ip }} | Slave {{ d.slave_id }}</span></h3>
+        <button class="btn btn-primary btn-sm" onclick="openAddParam({{ d.id }})">+ Add Parameter</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>ID</th><th>Key</th><th>Label</th><th>Unit</th><th>Register Addr</th><th>Max Value</th><th>Actions</th>
+          </tr></thead>
+          <tbody>
+          {% for p in params_map[d.id] %}
+          <tr>
+            <td>#{{ p.id }}</td>
+            <td><code style="color:var(--sub)">{{ p.key }}</code></td>
+            <td>{{ p.label }}</td>
+            <td>{{ p.unit }}</td>
+            <td>{{ p.address }}</td>
+            <td>{{ p.max_val }}</td>
+            <td style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm"
+                onclick="editParam({{ p.id }},'{{ p.key }}','{{ p.label }}','{{ p.unit }}',{{ p.address }},{{ p.max_val }})">✏ Edit</button>
+              <form method="POST" action="{{ url_for('admin_param_delete') }}" onsubmit="return confirm('Delete parameter?')">
+                <input type="hidden" name="param_id" value="{{ p.id }}">
+                <button type="submit" class="btn btn-danger btn-sm">🗑</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════
+       TAB 3: User Management
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="tab-panel" id="tab-users">
+    <div class="section-card">
+      <div class="section-card-header">
+        <h3>👥 Users</h3>
+        <button class="btn btn-primary btn-sm" onclick="openModal('modal-add-user')">+ Add User</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Email</th><th>Actions</th></tr></thead>
+          <tbody>
+          {% for u in users %}
+          <tr>
+            <td>#{{ u.id }}</td>
+            <td><strong>{{ u.username }}</strong></td>
+            <td><span class="badge {% if u.role=='admin' %}badge-admin{% else %}badge-user{% endif %}">{{ u.role }}</span></td>
+            <td>{{ u.email or '–' }}</td>
+            <td>
+              {% if u.id != 1 %}
+              <form method="POST" action="{{ url_for('admin_user_delete') }}" onsubmit="return confirm('Delete user {{ u.username }}?')">
+                <input type="hidden" name="user_id" value="{{ u.id }}">
+                <button type="submit" class="btn btn-danger btn-sm">🗑 Delete</button>
+              </form>
+              {% else %}
+              <span style="color:var(--sub);font-size:13px">Default admin</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div><!-- /main -->
+
+<!-- ════════════════════════════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════════════════════════════ -->
+
+<!-- Add Device Modal -->
+<div class="modal-overlay" id="modal-add-device">
+  <div class="modal">
+    <h3>+ Add PLC Device</h3>
+    <form method="POST" action="{{ url_for('admin_device_add') }}">
+      <div class="form-group"><label>Device Name</label>
+        <input class="form-control" name="name" placeholder="e.g. WL4415 – Unit 3" required></div>
+      <div class="form-group"><label>IP Address</label>
+        <input class="form-control" name="ip" placeholder="192.168.1.x" required></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group"><label>Port</label>
+          <input class="form-control" name="port" type="number" value="502" required></div>
+        <div class="form-group"><label>Slave ID</label>
+          <input class="form-control" name="slave_id" type="number" value="1" required></div>
+      </div>
+      <div class="form-group" style="flex-direction:row;align-items:center;gap:10px">
+        <input type="checkbox" name="enabled" id="en-add" checked style="width:18px;height:18px;accent-color:var(--accent)">
+        <label for="en-add" style="font-size:14px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--text)">Enable this device</label>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center">Save Device</button>
+        <button type="button" class="btn btn-ghost" onclick="closeModal('modal-add-device')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Device Modal -->
+<div class="modal-overlay" id="modal-edit-device">
+  <div class="modal">
+    <h3>✏ Edit PLC Device</h3>
+    <form method="POST" action="{{ url_for('admin_device_edit') }}">
+      <input type="hidden" name="device_id" id="edit-dev-id">
+      <div class="form-group"><label>Device Name</label>
+        <input class="form-control" name="name" id="edit-dev-name" required></div>
+      <div class="form-group"><label>IP Address</label>
+        <input class="form-control" name="ip" id="edit-dev-ip" required></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group"><label>Port</label>
+          <input class="form-control" name="port" id="edit-dev-port" type="number" required></div>
+        <div class="form-group"><label>Slave ID</label>
+          <input class="form-control" name="slave_id" id="edit-dev-slave" type="number" required></div>
+      </div>
+      <div class="form-group" style="flex-direction:row;align-items:center;gap:10px">
+        <input type="checkbox" name="enabled" id="edit-dev-enabled" style="width:18px;height:18px;accent-color:var(--accent)">
+        <label for="edit-dev-enabled" style="font-size:14px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--text)">Enable this device</label>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center">Update Device</button>
+        <button type="button" class="btn btn-ghost" onclick="closeModal('modal-edit-device')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Add Parameter Modal -->
+<div class="modal-overlay" id="modal-add-param">
+  <div class="modal">
+    <h3>+ Add Modbus Parameter</h3>
+    <form method="POST" action="{{ url_for('admin_param_add') }}">
+      <input type="hidden" name="device_id" id="add-param-device-id">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group"><label>Key (internal)</label>
+          <input class="form-control" name="key" placeholder="e.g. v_r_phase" required></div>
+        <div class="form-group"><label>Label (display)</label>
+          <input class="form-control" name="label" placeholder="e.g. Voltage R Phase" required></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div class="form-group"><label>Unit</label>
+          <input class="form-control" name="unit" placeholder="V / A / W …"></div>
+        <div class="form-group"><label>Register Addr</label>
+          <input class="form-control" name="address" type="number" required></div>
+        <div class="form-group"><label>Max Value</label>
+          <input class="form-control" name="max_val" type="number" value="100" required></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center">Save Parameter</button>
+        <button type="button" class="btn btn-ghost" onclick="closeModal('modal-add-param')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Parameter Modal -->
+<div class="modal-overlay" id="modal-edit-param">
+  <div class="modal">
+    <h3>✏ Edit Modbus Parameter</h3>
+    <form method="POST" action="{{ url_for('admin_param_edit') }}">
+      <input type="hidden" name="param_id" id="edit-param-id">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group"><label>Key (internal)</label>
+          <input class="form-control" name="key" id="ep-key" required></div>
+        <div class="form-group"><label>Label (display)</label>
+          <input class="form-control" name="label" id="ep-label" required></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div class="form-group"><label>Unit</label>
+          <input class="form-control" name="unit" id="ep-unit"></div>
+        <div class="form-group"><label>Register Addr</label>
+          <input class="form-control" name="address" id="ep-addr" type="number" required></div>
+        <div class="form-group"><label>Max Value</label>
+          <input class="form-control" name="max_val" id="ep-max" type="number" required></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center">Update Parameter</button>
+        <button type="button" class="btn btn-ghost" onclick="closeModal('modal-edit-param')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal-overlay" id="modal-add-user">
+  <div class="modal">
+    <h3>+ Add User</h3>
+    <form method="POST" action="{{ url_for('admin_user_add') }}">
+      <div class="form-group"><label>Username</label>
+        <input class="form-control" name="username" required></div>
+      <div class="form-group"><label>Password</label>
+        <input class="form-control" type="password" name="password" required minlength="6"></div>
+      <div class="form-group"><label>Role</label>
+        <select class="form-control" name="role">
+          <option value="user">User (View Only)</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center">Create User</button>
+        <button type="button" class="btn btn-ghost" onclick="closeModal('modal-add-user')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.atab').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function editDevice(id, name, ip, port, slave_id, enabled) {
+  document.getElementById('edit-dev-id').value    = id;
+  document.getElementById('edit-dev-name').value  = name;
+  document.getElementById('edit-dev-ip').value    = ip;
+  document.getElementById('edit-dev-port').value  = port;
+  document.getElementById('edit-dev-slave').value = slave_id;
+  document.getElementById('edit-dev-enabled').checked = !!enabled;
+  openModal('modal-edit-device');
+}
+
+function openAddParam(deviceId) {
+  document.getElementById('add-param-device-id').value = deviceId;
+  openModal('modal-add-param');
+}
+
+function editParam(id, key, label, unit, address, max_val) {
+  document.getElementById('edit-param-id').value = id;
+  document.getElementById('ep-key').value    = key;
+  document.getElementById('ep-label').value  = label;
+  document.getElementById('ep-unit').value   = unit;
+  document.getElementById('ep-addr').value   = address;
+  document.getElementById('ep-max').value    = max_val;
+  openModal('modal-edit-param');
+}
+</script>
+{% endblock %}

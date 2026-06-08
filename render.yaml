@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: scada-dashboard
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SMTP_PASSWORD
+        sync: false          # set manually in dashboard
+      - key: DATABASE_PATH
+        value: /opt/render/project/src/scada.db
+      - key: DEFAULT_PLC_IP
+        value: 192.168.1.5
+      - key: DEFAULT_PLC_PORT
+        value: "502"

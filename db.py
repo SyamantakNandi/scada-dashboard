@@ -1,10 +1,8 @@
 """
-db.py – SQLite helpers for the SCADA web app.
-Tables:
-  users          – admin / user accounts
-  plc_devices    – PLC connections (ip, port, slave_id, name)
-  modbus_params  – per-device parameter map (key, label, unit, address, max_val)
-  otp_store      – temporary OTP tokens for admin signup
+db.py - SQLite helpers for SCADA web app.
+Default accounts:
+  Admin  → username: scada_admin   password: Admin@SCADA2024
+  User   → username: scada_user    password: User@SCADA2024
 """
 
 import sqlite3
@@ -12,7 +10,6 @@ import hashlib
 import os
 import config
 
-# ─── Default parameters (slave 1) ────────────────────────────────────────────
 DEFAULT_PARAMS_S1 = [
     ("v_r_phase",           "Voltage R Phase",       "V",    5,   500),
     ("v_y_phase",           "Voltage Y Phase",       "V",    7,   500),
@@ -70,7 +67,6 @@ DEFAULT_PARAMS_S1 = [
     ("amp_max",             "Ampere Max",            "A",  111,   500),
 ]
 
-# ─── Default parameters (slave 2) ────────────────────────────────────────────
 DEFAULT_PARAMS_S2 = [
     ("v_r_phase",           "Voltage R Phase",       "V",  113,   500),
     ("v_y_phase",           "Voltage Y Phase",       "V",  115,   500),
@@ -132,6 +128,7 @@ DEFAULT_PARAMS_S2 = [
 def get_conn():
     conn = sqlite3.connect(config.DATABASE_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
@@ -143,79 +140,68 @@ def init_db():
     conn = get_conn()
     c = conn.cursor()
 
-    # users
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id       INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT    UNIQUE NOT NULL,
-            password TEXT    NOT NULL,
-            role     TEXT    NOT NULL DEFAULT 'user',
-            email    TEXT
-        )
-    """)
+    c.execute("""CREATE TABLE IF NOT EXISTS users (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        role     TEXT NOT NULL DEFAULT 'user',
+        email    TEXT
+    )""")
 
-    # plc_devices
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS plc_devices (
-            id       INTEGER PRIMARY KEY AUTOINCREMENT,
-            name     TEXT    NOT NULL,
-            ip       TEXT    NOT NULL,
-            port     INTEGER NOT NULL DEFAULT 502,
-            slave_id INTEGER NOT NULL DEFAULT 1,
-            enabled  INTEGER NOT NULL DEFAULT 1
-        )
-    """)
+    c.execute("""CREATE TABLE IF NOT EXISTS plc_devices (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        name     TEXT NOT NULL,
+        ip       TEXT NOT NULL,
+        port     INTEGER NOT NULL DEFAULT 502,
+        slave_id INTEGER NOT NULL DEFAULT 1,
+        enabled  INTEGER NOT NULL DEFAULT 1
+    )""")
 
-    # modbus_params
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS modbus_params (
-            id        INTEGER PRIMARY KEY AUTOINCREMENT,
-            device_id INTEGER NOT NULL,
-            key       TEXT    NOT NULL,
-            label     TEXT    NOT NULL,
-            unit      TEXT    NOT NULL DEFAULT '',
-            address   INTEGER NOT NULL,
-            max_val   REAL    NOT NULL DEFAULT 100,
-            FOREIGN KEY (device_id) REFERENCES plc_devices(id) ON DELETE CASCADE
-        )
-    """)
-
-    # otp_store
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS otp_store (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            email      TEXT    NOT NULL,
-            otp        TEXT    NOT NULL,
-            expires_at REAL    NOT NULL
-        )
-    """)
+    c.execute("""CREATE TABLE IF NOT EXISTS modbus_params (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id INTEGER NOT NULL,
+        key       TEXT NOT NULL,
+        label     TEXT NOT NULL,
+        unit      TEXT NOT NULL DEFAULT '',
+        address   INTEGER NOT NULL,
+        max_val   REAL NOT NULL DEFAULT 100,
+        FOREIGN KEY (device_id) REFERENCES plc_devices(id) ON DELETE CASCADE
+    )""")
 
     conn.commit()
 
-    # ── seed default admin ───────────────────────────────────────────────────
-    c.execute("SELECT id FROM users WHERE username='admin'")
+    # ── Seed default admin ────────────────────────────────────────────────────
+    c.execute("SELECT id FROM users WHERE username='scada_admin'")
     if not c.fetchone():
         c.execute(
-            "INSERT INTO users (username, password, role, email) VALUES (?,?,?,?)",
-            ("admin", hash_password("admin123"), "admin", config.ADMIN_EMAIL)
+            "INSERT INTO users (username,password,role,email) VALUES (?,?,?,?)",
+            ("scada_admin", hash_password("Admin@SCADA2024"), "admin", config.ADMIN_EMAIL)
         )
-        conn.commit()
 
-    # ── seed default PLC devices if none exist ───────────────────────────────
+    # ── Seed default user ─────────────────────────────────────────────────────
+    c.execute("SELECT id FROM users WHERE username='scada_user'")
+    if not c.fetchone():
+        c.execute(
+            "INSERT INTO users (username,password,role) VALUES (?,?,?)",
+            ("scada_user", hash_password("User@SCADA2024"), "user")
+        )
+
+    conn.commit()
+
+    # ── Seed default PLC devices ──────────────────────────────────────────────
     c.execute("SELECT id FROM plc_devices")
     if not c.fetchone():
         c.execute(
             "INSERT INTO plc_devices (name,ip,port,slave_id) VALUES (?,?,?,?)",
-            ("WL4415 – Unit 1", config.DEFAULT_PLC_IP, config.DEFAULT_PLC_PORT, 1)
+            ("WL4415 - Unit 1", config.DEFAULT_PLC_IP, config.DEFAULT_PLC_PORT, 1)
         )
         d1 = c.lastrowid
         c.execute(
             "INSERT INTO plc_devices (name,ip,port,slave_id) VALUES (?,?,?,?)",
-            ("WL4415 – Unit 2", config.DEFAULT_PLC_IP, config.DEFAULT_PLC_PORT, 2)
+            ("WL4415 - Unit 2", config.DEFAULT_PLC_IP, config.DEFAULT_PLC_PORT, 2)
         )
         d2 = c.lastrowid
         conn.commit()
-
         for row in DEFAULT_PARAMS_S1:
             c.execute(
                 "INSERT INTO modbus_params (device_id,key,label,unit,address,max_val) VALUES (?,?,?,?,?,?)",
@@ -231,23 +217,19 @@ def init_db():
     conn.close()
 
 
-# ─── Convenience getters ──────────────────────────────────────────────────────
-
 def get_all_devices():
     conn = get_conn()
     rows = conn.execute("SELECT * FROM plc_devices ORDER BY id").fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
-
-def get_device(device_id: int):
+def get_device(device_id):
     conn = get_conn()
     row = conn.execute("SELECT * FROM plc_devices WHERE id=?", (device_id,)).fetchone()
     conn.close()
     return dict(row) if row else None
 
-
-def get_params_for_device(device_id: int):
+def get_params_for_device(device_id):
     conn = get_conn()
     rows = conn.execute(
         "SELECT * FROM modbus_params WHERE device_id=? ORDER BY address",
@@ -256,13 +238,11 @@ def get_params_for_device(device_id: int):
     conn.close()
     return [dict(r) for r in rows]
 
-
-def get_user(username: str):
+def get_user(username):
     conn = get_conn()
     row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
     conn.close()
     return dict(row) if row else None
-
 
 def get_all_users():
     conn = get_conn()

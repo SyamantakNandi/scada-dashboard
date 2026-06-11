@@ -1,88 +1,109 @@
 {% extends "base.html" %}
 {% block title %}Login – SCADA Dashboard{% endblock %}
-
 {% block extra_head %}
 <style>
-body{display:flex;align-items:center;justify-content:center;
-     background:radial-gradient(ellipse at 60% 40%, #0d1b3e 0%, #0b0f1a 60%)}
-.login-wrap{width:100%;max-width:440px;padding:20px}
-.brand{display:flex;align-items:center;gap:12px;margin-bottom:36px;justify-content:center}
-.brand-icon{width:52px;height:52px;background:var(--accent);border-radius:14px;
-            display:flex;align-items:center;justify-content:center;font-size:26px;
-            box-shadow:0 0 30px rgba(37,99,235,.4)}
-.brand-name{font-size:24px;font-weight:800;letter-spacing:-.5px}
-.brand-sub{font-size:13px;color:var(--sub);font-weight:400}
+body{display:flex;align-items:center;justify-content:center;min-height:100vh;
+     background:radial-gradient(ellipse at 60% 40%,#0d1b3e 0%,#0b0f1a 70%)}
+.wrap{width:100%;max-width:420px;padding:20px}
+.brand{display:flex;align-items:center;gap:14px;margin-bottom:36px;justify-content:center}
+.brand-icon{width:54px;height:54px;background:linear-gradient(135deg,#2563eb,#1d4ed8);
+            border-radius:14px;display:flex;align-items:center;justify-content:center;
+            font-size:28px;box-shadow:0 0 30px rgba(37,99,235,.5)}
+.brand-text h1{font-size:22px;font-weight:800;letter-spacing:-.5px}
+.brand-text p{font-size:12px;color:var(--sub);margin-top:2px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:20px;
-      padding:36px;box-shadow:var(--card-glow)}
-.card h2{font-size:22px;font-weight:700;margin-bottom:6px}
-.card p{color:var(--sub);font-size:14px;margin-bottom:28px}
-.role-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:28px}
-.role-tab{padding:12px;border-radius:10px;border:2px solid var(--border);cursor:pointer;
-          text-align:center;font-weight:600;font-size:14px;transition:all .2s;background:transparent;color:var(--sub)}
-.role-tab.active{border-color:var(--accent);background:rgba(37,99,235,.1);color:var(--text)}
-.divider{text-align:center;color:var(--sub);font-size:13px;margin:20px 0;position:relative}
-.divider::before,.divider::after{content:'';position:absolute;top:50%;width:42%;height:1px;background:var(--border)}
-.divider::before{left:0} .divider::after{right:0}
-.signup-link{text-align:center;font-size:14px;color:var(--sub);margin-top:20px}
-.signup-link a{color:var(--accent2);font-weight:600;text-decoration:none}
-.signup-link a:hover{text-decoration:underline}
-.input-icon-wrap{position:relative}
-.input-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:16px}
-.input-icon-wrap .form-control{padding-left:40px}
+      padding:36px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.card-title{font-size:20px;font-weight:700;margin-bottom:4px}
+.card-sub{color:var(--sub);font-size:13px;margin-bottom:28px}
+.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:28px}
+.role-btn{padding:14px;border-radius:12px;border:2px solid var(--border);cursor:pointer;
+          text-align:center;background:var(--surface2);transition:all .2s}
+.role-btn .icon{font-size:24px;display:block;margin-bottom:6px}
+.role-btn .label{font-size:13px;font-weight:700;color:var(--sub)}
+.role-btn .desc{font-size:11px;color:var(--sub);margin-top:3px;opacity:.7}
+.role-btn.active{border-color:var(--accent);background:rgba(37,99,235,.12)}
+.role-btn.active .label{color:var(--text)}
+.hint-box{background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.2);
+          border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:var(--sub)}
+.hint-box strong{color:var(--accent2)}
+.input-wrap{position:relative;margin-bottom:16px}
+.input-wrap label{display:block;font-size:12px;font-weight:600;color:var(--sub);
+                  text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.input-wrap .icon{position:absolute;left:14px;bottom:11px;font-size:15px;color:var(--sub)}
+.input-wrap input{width:100%;background:var(--bg);border:1px solid var(--border);
+                  color:var(--text);padding:11px 14px 11px 40px;border-radius:8px;
+                  font-size:14px;font-family:inherit;transition:border .2s;box-sizing:border-box}
+.input-wrap input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+.submit-btn{width:100%;padding:13px;background:linear-gradient(135deg,#2563eb,#1d4ed8);
+            color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;
+            cursor:pointer;transition:all .2s;margin-top:4px}
+.submit-btn:hover{transform:translateY(-1px);box-shadow:0 8px 25px rgba(37,99,235,.4)}
+.footer-note{text-align:center;font-size:12px;color:var(--sub);margin-top:20px}
 </style>
 {% endblock %}
-
 {% block body %}
-<div class="login-wrap">
+<div class="wrap">
   <div class="brand">
     <div class="brand-icon">⚡</div>
-    <div>
-      <div class="brand-name">SCADA Portal</div>
-      <div class="brand-sub">Industrial Monitoring System</div>
+    <div class="brand-text">
+      <h1>SCADA Portal</h1>
+      <p>Industrial Monitoring System</p>
     </div>
   </div>
 
   <div class="card">
-    <h2>Sign In</h2>
-    <p>Select your role and enter your credentials</p>
+    <div class="card-title">Welcome Back</div>
+    <div class="card-sub">Sign in to access the dashboard</div>
 
-    <div class="role-tabs">
-      <button class="role-tab active" id="tab-admin" onclick="setRole('admin')">🔑 Admin</button>
-      <button class="role-tab"        id="tab-user"  onclick="setRole('user')">👁 View Only</button>
+    <div class="role-grid">
+      <div class="role-btn active" id="btn-admin" onclick="setRole('admin')">
+        <span class="icon">🔑</span>
+        <div class="label">Admin</div>
+        <div class="desc">Full access</div>
+      </div>
+      <div class="role-btn" id="btn-user" onclick="setRole('user')">
+        <span class="icon">👁</span>
+        <div class="label">User</div>
+        <div class="desc">View only</div>
+      </div>
+    </div>
+
+    <div class="hint-box" id="hint-box">
+      <strong>Admin Login:</strong> scada_admin / Admin@SCADA2024
     </div>
 
     <form method="POST">
-      <div class="form-group">
+      <div class="input-wrap">
         <label>Username</label>
-        <div class="input-icon-wrap">
-          <span class="input-icon">👤</span>
-          <input class="form-control" type="text" name="username" placeholder="Enter username" required>
-        </div>
+        <span class="icon">👤</span>
+        <input type="text" name="username" id="username-input"
+               placeholder="Enter username" required autocomplete="username">
       </div>
-      <div class="form-group">
+      <div class="input-wrap">
         <label>Password</label>
-        <div class="input-icon-wrap">
-          <span class="input-icon">🔒</span>
-          <input class="form-control" type="password" name="password" placeholder="Enter password" required>
-        </div>
+        <span class="icon">🔒</span>
+        <input type="password" name="password"
+               placeholder="Enter password" required autocomplete="current-password">
       </div>
-      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:13px">
-        Sign In →
-      </button>
+      <button type="submit" class="submit-btn">Sign In →</button>
     </form>
 
-    <div class="divider">or</div>
-
-    <div class="signup-link">
-      Need admin access? <a href="{{ url_for('signup') }}">Request Admin Account</a>
+    <div class="footer-note">
+      WL4415 Industrial SCADA v2.0
     </div>
   </div>
 </div>
 
 <script>
-function setRole(r){
-  document.getElementById('tab-admin').classList.toggle('active', r==='admin');
-  document.getElementById('tab-user').classList.toggle('active', r==='user');
+const hints = {
+  admin: '<strong>Admin Login:</strong> scada_admin / Admin@SCADA2024',
+  user:  '<strong>User Login:</strong> scada_user / User@SCADA2024'
+};
+function setRole(r) {
+  document.getElementById('btn-admin').classList.toggle('active', r==='admin');
+  document.getElementById('btn-user').classList.toggle('active', r==='user');
+  document.getElementById('hint-box').innerHTML = hints[r];
+  document.getElementById('username-input').value = r==='admin' ? 'scada_admin' : 'scada_user';
 }
 </script>
 {% endblock %}
